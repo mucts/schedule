@@ -53,7 +53,7 @@ const createOrderId = async function (sctsId, order) {
         order = `0${order}`;
     }
     order = order.substring(order.length, -7);
-    let time = (today.clone().getTime() - (new Date(today.clone().toFormat("YYYY-MM-DD")).getTime())).toString();
+    let time = (today.clone().getTime() - (new Date(today.clone().toFormat("YYYY-MM-DD 00:00:00")).getTime())).toString();
     while (time.length < 8) {
         time = `0${time}`;
     }
@@ -75,8 +75,21 @@ const doOrder = async function (orm, queueId, type = 1, shiftDate = new Date().t
     let lat = await inAppointTime(shiftDate), time, scid, code, message, info, sctsName, result = 0;
     try {
         if (lat) {
+            let queueInfo = await orm.sys.checkQueueInfo.first({id: queueId});
+            if (!queueInfo) {
+                return {
+                    code: KoaConfig.constant.badRequest,
+                    message: "排班队列不存在"
+                }
+            }
             if (type === 1) {
-                result = await await orm.sys.checkScheduleInfo.count({
+                if (queueInfo.supportAppointment !== 1) {
+                    return {
+                        code: KoaConfig.constant.badRequest,
+                        message: "该排班队列不开放预约"
+                    }
+                }
+                result = await orm.sys.checkScheduleInfo.count({
                     shiftDate: shiftDate,
                     queueId: queueId,
                     order: order,
@@ -84,7 +97,7 @@ const doOrder = async function (orm, queueId, type = 1, shiftDate = new Date().t
                 });
             }
             if (result === 0) {
-                result = await getTimeSlot(orm, queueId, shiftDate, type === 1);
+                result = await getTimeSlot(orm, queueId, shiftDate, type !== 1 && queueInfo.supportTakeOver !== 0);
                 if (result.remaining) {
                     for (const i in result.timeSlot) {
                         if (type === 2) {
@@ -175,19 +188,26 @@ const doOrder = async function (orm, queueId, type = 1, shiftDate = new Date().t
  * @param {Object} orm 数据库orm
  * @param {number} queueId 队列ID
  * @param {string} shiftDate 排班时间
- * @param {Boolean} isOccupy 是否是取号
+ * @param {Boolean} isTake 是否是取号
  * @returns {{timeSlot: Array, remaining: number}}
  */
-const getTimeSlot = async function (orm, queueId, shiftDate = new Date().toFormat("YYYY-MM-DD"), isOccupy = true) {
+const getTimeSlot = async function (orm, queueId, shiftDate = new Date().toFormat("YYYY-MM-DD"), isTake = true) {
     let week = new Date(shiftDate).getDay();
     let scheduleConfig = await orm.sys.checkScheduleConfig.first({
         scType: 2,
         scDate: shiftDate,
+        queueId: queueId,
         isDelete: 0,
         scState: 1
     });
     if (!scheduleConfig) {
-        scheduleConfig = await orm.sys.checkScheduleConfig.first({scType: 1, weekId: week, isDelete: 0, scState: 1});
+        scheduleConfig = await orm.sys.checkScheduleConfig.first({
+            scType: 1,
+            queueId: queueId,
+            weekId: week,
+            isDelete: 0,
+            scState: 1
+        });
     }
     let timeSlotConfig, usedList;
     if (scheduleConfig) {
@@ -226,7 +246,7 @@ const getTimeSlot = async function (orm, queueId, shiftDate = new Date().toForma
                             }
                         }
                     }
-                    if (isOccupy && (time.getTime() + (config.todayLimitTime * 1000) < (new Date().getTime()))) {
+                    if (!isTake && (time.getTime() + (config.todayLimitTime * 1000) < (new Date().getTime()))) {
                         had = true;
                     }
                     if (!had) {

@@ -32,8 +32,8 @@ module.exports = {
             context.badRequest("该预约时间暂不放号");
             return;
         }
-        let sctcId = context.request.body.sctc_id;
-        if (!sctcId) {
+        let sctsId = context.request.body.scts_id;
+        if (!sctsId) {
             context.status = KoaConfig.constant.badRequest;
             context.badRequest("请输入号段编号");
             return;
@@ -44,7 +44,7 @@ module.exports = {
             context.badRequest("请输入号数");
             return;
         }
-        let result = await sc.doOrder(context.app.orm, queueId, 1, shiftDate, order, sctcId);
+        let result = await sc.doOrder(context.app.orm, queueId, 1, shiftDate, order, sctsId);
         context.status = result.code || KoaConfig.constant.success;
         context.body = {
             code: result.code || KoaConfig.constant.success,

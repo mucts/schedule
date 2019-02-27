@@ -2,7 +2,7 @@
 
 const config = {
     //监听端口
-    port: 8080,
+    port: 3011,
     //可以指定允许跨域访问的域名
     allowOrigin: "*",
     ///预约限制
